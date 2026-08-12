@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中英文打字練習遊戲</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="bg-glow"></div>
+    <div class="container">
+        <!-- 標頭 -->
+        <header>
+            <h1 class="logo-title"><i class="fa-solid fa-keyboard text-glow"></i> TypeQuest</h1>
+            <p class="subtitle">專業級中英文打字練習與評測系統</p>
+        </header>
+
+        <!-- 主面板 -->
+        <main class="glass-panel">
+            <!-- 遊戲設定區 -->
+            <section id="settings-section" class="settings-grid">
+                <div class="setting-item">
+                    <label><i class="fa-solid fa-language"></i> 練習模式</label>
+                    <div class="mode-selector">
+                        <button type="button" class="mode-btn active" id="btn-mode-zh" onclick="setMode('zh')">中文模式</button>
+                        <button type="button" class="mode-btn" id="btn-mode-en" onclick="setMode('en')">英文模式</button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label for="book-select"><i class="fa-solid fa-book-open"></i> 選擇題庫</label>
+                    <div class="select-group">
+                        <select id="book-select" onchange="loadSelectedBook()">
+                            <!-- 動態載入 -->
+                        </select>
+                        <button class="icon-btn" id="btn-import-trigger" title="匯入自訂題庫 (.txt)">
+                            <i class="fa-solid fa-file-import"></i>
+                        </button>
+                    </div>
+                    <input type="file" id="file-import" accept=".txt" style="display: none;">
+                </div>
+
+                <div class="setting-item">
+                    <label for="time-select"><i class="fa-solid fa-clock"></i> 測驗時間</label>
+                    <select id="time-select">
+                        <option value="1">1 分鐘</option>
+                        <option value="3">3 分鐘</option>
+                        <option value="5" selected>5 分鐘</option>
+                        <option value="10">10 分鐘</option>
+                        <option value="custom">自訂時間</option>
+                    </select>
+                </div>
+
+                <div class="setting-item start-container">
+                    <button class="btn-primary" id="btn-start" onclick="startGame()">
+                        <i class="fa-solid fa-play"></i> 開始測驗
+                    </button>
+                </div>
+            </section>
+
+            <!-- 自訂時間輸入框 (預設隱藏) -->
+            <section id="custom-time-section" class="custom-time-container hidden">
+                <div class="form-group">
+                    <label for="custom-time-input">請輸入時間 (分鐘，可小數，如 0.5): </label>
+                    <input type="number" id="custom-time-input" min="0.1" step="0.1" value="1">
+                </div>
+            </section>
+
+            <!-- 狀態列 -->
+            <section id="status-section" class="status-bar hidden">
+                <div class="status-item">
+                    <span class="status-label">剩餘時間</span>
+                    <span class="status-value highlight" id="stat-time">--:--</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label" id="speed-label">即時速度</span>
+                    <span class="status-value" id="stat-speed">0 字/分</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">總擊數/字數</span>
+                    <span class="status-value" id="stat-keys">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">錯誤次數</span>
+                    <span class="status-value error-text" id="stat-errors">0</span>
+                </div>
+                <div class="status-item progress-container">
+                    <span class="status-label">進度</span>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="stat-progress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <button class="btn-danger-sm" id="btn-stop" onclick="stopGame(true)">
+                    <i class="fa-solid fa-stop"></i> 結束
+                </button>
+            </section>
+
+            <!-- 打字練習主介面 -->
+            <section id="typing-area" class="typing-container hidden">
+                <!-- 原稿對比顯示區 -->
+                <div class="display-wrapper" id="display-wrapper">
+                    <div id="text-display" class="text-display-box"></div>
+                </div>
+
+                <!-- 輸入區 -->
+                <div class="input-wrapper">
+                    <textarea id="typing-input-box" placeholder="請在此開始輸入。按 Tab 鍵可完成縮排，題本換行時請按 Enter 鍵換行..." autocomplete="off"></textarea>
+                </div>
+            </section>
+        </main>
+
+        <!-- 結算報告 Modal -->
+        <div id="result-modal" class="modal-overlay hidden">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h2><i class="fa-solid fa-chart-line text-glow"></i> 測驗結果結算</h2>
+                    <button class="close-btn" onclick="closeResultModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- 中文結果 -->
+                    <div id="result-zh" class="result-layout hidden">
+                        <div class="stats-grid">
+                            <div class="card-stat">
+                                <span class="card-title">每分鐘平均字數</span>
+                                <span class="card-val text-glow" id="res-zh-speed">0.0</span>
+                                <span class="card-unit">字/分</span>
+                            </div>
+                            <div class="card-stat">
+                                <span class="card-title">錯誤率</span>
+                                <span class="card-val" id="res-zh-err-rate">0%</span>
+                                <span class="card-unit" id="res-zh-status">合格</span>
+                            </div>
+                            <div class="card-stat">
+                                <span class="card-title">應打 / 正確字</span>
+                                <span class="card-val" id="res-zh-chars">0 / 0</span>
+                                <span class="card-unit">個字</span>
+                            </div>
+                            <div class="card-stat">
+                                <span class="card-title">錯誤次數 (扣字)</span>
+                                <span class="card-val error-text" id="res-zh-errors">0 (0.0)</span>
+                                <span class="card-unit">次 (字)</span>
+                            </div>
+                        </div>
+
+                        <!-- 錯誤細項統計 -->
+                        <div class="details-section">
+                            <h3><i class="fa-solid fa-list-check"></i> 錯誤類型細項</h3>
+                            <div class="error-breakdown">
+                                <div class="breakdown-item"><span class="badge badge-sub">錯打</span> <span id="break-sub">0</span> 字</div>
+                                <div class="breakdown-item"><span class="badge badge-ins">多打</span> <span id="break-ins">0</span> 字</div>
+                                <div class="breakdown-item"><span class="badge badge-del">漏打</span> <span id="break-del">0</span> 字</div>
+                                <div class="breakdown-item"><span class="badge badge-trans">顛倒</span> <span id="break-trans">0</span> 組</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 英文結果 -->
+                    <div id="result-en" class="result-layout hidden">
+                        <div class="stats-grid">
+                            <div class="card-stat">
+                                <span class="card-title">每分鐘淨打字數 (WPM)</span>
+                                <span class="card-val text-glow" id="res-en-wpm">0.0</span>
+                                <span class="card-unit">WPM</span>
+                            </div>
+                            <div class="card-stat">
+                                <span class="card-title">總擊數</span>
+                                <span class="card-val" id="res-en-keys">0</span>
+                                <span class="card-unit">擊</span>
+                            </div>
+                            <div class="card-stat">
+                                <span class="card-title">錯誤次數</span>
+                                <span class="card-val error-text" id="res-en-errors">0</span>
+                                <span class="card-unit">次</span>
+                            </div>
+                            <div class="card-stat">
+                                <span class="card-title">扣除擊數</span>
+                                <span class="card-val" id="res-en-penalty">0</span>
+                                <span class="card-unit">擊</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 常規資訊 -->
+                    <div class="general-info">
+                        <span class="info-tag"><i class="fa-solid fa-hourglass-half"></i> 測驗時間: <span id="res-duration">0</span> 分鐘</span>
+                        <span class="info-tag"><i class="fa-solid fa-file-lines"></i> 題庫: <span id="res-book-name">未指定</span></span>
+                    </div>
+
+                    <!-- 詳細比對結果 -->
+                    <div class="compare-details-container">
+                        <h3><i class="fa-solid fa-magnifying-glass-chart"></i> 輸入比對詳細結果</h3>
+                        <p class="legend">
+                            <span class="legend-item"><span class="dot match"></span>正確</span>
+                            <span class="legend-item"><span class="dot sub"></span>錯打</span>
+                            <span class="legend-item"><span class="dot ins"></span>多打</span>
+                            <span class="legend-item"><span class="dot del"></span>漏打</span>
+                            <span class="legend-item"><span class="dot trans"></span>顛倒</span>
+                        </p>
+                        <div class="compare-box" id="compare-result-box">
+                            <!-- JS動態生成對比的 HTML -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-primary" onclick="restartGame()"><i class="fa-solid fa-arrows-rotate"></i> 重新測驗</button>
+                    <button class="btn-secondary" onclick="closeResultModal()"><i class="fa-solid fa-xmark"></i> 關閉報告</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 內建題庫的資料載入 Script -->
+    <script>
+        // 用於儲存預設文章內容 (包含首行縮排)
+        window.DEFAULT_BOOKS = {
+            "zh-0003-1": {
+                name: "CHN-0003-1 中文模擬試題",
+                mode: "zh",
+                content: `　　比鄰淡水河座落中山高速公路側的迪化休閒運動公園，為一座幅員廣闊的複合式休憩公共空間。衛工處依四季節令更迭種植花草，當季選擇了矮牽牛、一串紅和秋海棠等繽紛盆栽，趕搭聖誕節慶進行妝點佈置，讓即將步入寒冬的城區綻放些絢爛色彩。園區腹地頗大，裡面設有許多球類運動場地、健康步道及兒童遊戲場，提供民眾盡情熱血飆汗、親子同樂的環境；沿著淡水河畔建造的跨堤景觀平台，形狀像一抹明月般由燈飾勾勒出橋拱，適合愜意午後或跨年倒數的好去處。此外，緊臨著大龍峒孔廟及保安宮緣故，結合鄰近豐富歷史人文色彩，走出家門外來趟都市輕鬆旅行唷！
+　　關於病人自主權利法其目標及精神，包括尊重安寧照顧、醫療自主與善終權益，促進雙方關係和諧。衛生局在積極推廣簽署下，數家醫院所提供服務讓有意願者透過照護諮詢簽下書面契約，表達並讓摯愛親友們在關鍵時刻了解病患想法，減少痛苦或紛爭。簽署人數在各縣市中位居第一，個案大多為院內病患，男女性別比例為一比二，年齡層分佈超過五成介於六十歲以上長者，數據顯示出針對善終議題在銀髮族會較為關心與重視。
+　　這個網路資訊爆炸時代，企業電子化管理儼然成為不可或缺趨勢。近年來有更多大公司將傳統打卡機、紙本的出缺勤紀錄等資料進行無紙化動作；對中小企業來說，雲端化過程不僅需要耗費龐大經費建立新系統，要再花時間教導職員使用，還得經歷適應期，無疑是個大工程。好在有些民間企業開發簡易操作介面且合併多種功能的雲端人資系統，接受度高又協助提升最大運作效率來解決繁瑣事務，實踐節能減碳、綠色生活的理念。
+　　年節將屆，食品需求激增，請注意別從國外帶豬肉製品，在安全檢查大隊把關下這些將限制入境。專業人士表示，有機物會在監視螢幕中顯示橘色，當包裹經過安檢機，畫面將呈現該顏色後就被海關攔住並會同郵政人員盤察。跨境電商發展速度驚人，使用介面簡單且甚至擁有一週左右到貨特性，吸引消費者海外網購，但誤買禁止輸入商品後果卻相當嚴重。
+　　人口老化是我們面臨之重大問題，衝擊社會穩定性、影響農業產量及糧食自給率，也間接影響賴以存活的野生動植物們。當菱角田被一堆租用來設置太陽光電板而種植面積減縮，造成水雉棲地被影響時，其數量可想而知也會隨著下降。因此維持農田面積與生態系統也是保育物種多樣性的重要課題，現今發展綠能政策不應奠基在對濕地與農漁業環境破壞。政府必須針對相關業者開發濕地、耕地與鱼塭行為予以嚴格監督，做好確認。
+　　人在這快速忙碌時代，依舊重視成功成就並獲取錢財，但卻忘記去照顧像身心健康這種無形且重要的財富累積。當今各種訊息鋪天蓋地而來，讓每個人疲憊得喘不過氣。呼吸就像座橋梁，連結著身體與心靈。當日常換氣變得急淺短促，情緒容易焦慮更難以平復，甚至造成自律神經失調，免疫力降低。既然無法馬上改變繁忙日子，但我們還是能夠有意願去轉換呼吸節奏，練習調節的能力。時序進入歲末，在成堆功課或龐大且繁重工作任務或者家中數不清的鎖事間，都要常自我提醒要記得學好怎麼呼吸。
+　　結婚後生活需要彼此共同經營，白頭偕老不應該只是個目標或任務，或雙方發自內心願望而已。婚姻這種東西，必須要歷經漫長歲月洗禮、平淡日子考驗，若僅憑一方單薄力量守護，即便保住了這段關係，恐怕也弄得自己心力交瘁。馬太效應無處不在，有時人擁有越少，手裡東西反而更容易流掉或被奪走。當太過倚重，就容易出現危機，因此最好的防守就是認真積極並主動出擊，不必時刻擔任著感情中孤獨守護者，經營好整個人生。一旦有了更多的保障和選項，自然能夠固若金湯。`
+            },
+            "eng-0003-1": {
+                name: "ENG-0003-1 英文模擬試題",
+                mode: "en",
+                content: `     Meanwhile, young people gravitate to cities for jobs and the circle repeats. On top of this, Japan faces its own special situation: the country is a global leader in super-aging, with one in five citizens already a septuagenarian. That ratio is even more stark in rural areas. The solution, as Japan envisions it, is to combine the best of today's technology with a united social front.
+     Disposable face masks are a normal aspect of life in Japan. They can be found on public transport like trains and buses and in communal spaces as offices and schools, and are worn by workers and patrons alike in shops and restaurants. Demand has rapidly grown over the last decade and the preventive items have come to be part of Japanese social etiquette. Although normally widely available, recently stores are struggling to keep masks in supply, as residents and tourists concerned over the ongoing coronavirus crises rush to stock up.
+     Rejoice, nap lovers! A recent study found a daytime snooze once or twice a week could benefit your heart. In a study published Monday in the journal Heart, researchers from the University Hospital of Lausanne in Switzerland detailed the results from their study on the relationship between napping frequency/average nap time and the risk of fatal and nonfatal cardiovascular disease. While other studies have looked at the link between napping and heart health, the study is one of the few that considers napping frequency and duration, researchers claim.
+     After speaking with over 2,000 people between the ages of 8 and 17, the Safer Internet Centre concluded that online life is a 'fundamental' part of a young person's existence in 2020. Almost half of young people aged 8-17 said that what they do and see online contributes to their identity, making up an essential part of who they are offline.
+     She got her start while growing up in Queens in the 1980s, roaming New York City streets with a camera in hand. Her first artworks were photographs and collages; one of her earliest photo series captured a pro-choice march in Washington, D.C. After taking an intensive class at New York Studio School, she turned to painting.
+     The source also said that two other skiers received minor injuries while two more were rescued from under the snow. Magistrates in Trento have opened an investigation and were headed to the accident scene on Sunday morning. They will survey the site and assess if appropriate security measures were in place on the ski slopes. Officials have not excluded the possibility the avalanche was caused by off-piste skiers.
+     Each of the schools presented technology-driven solutions to issues facing their own communities. A High School in Iwate Prefecture was commended for building a system using interactive video games to keep their town's aging population active and healthy. Yuge Island in Ehime Prefecture is only accessible by ferry and also struggles with age demographics. The students of a High School won a prize for creating a YouTube series and using social media to market the island's potential as a great place for young people to live and work.`
+            }
+        };
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>
