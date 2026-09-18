@@ -486,6 +486,14 @@ function alignChineseGlobal(source, input) {
     }
     
     path.reverse();
+    
+    // 將末端連續未輸入的 del 字元標記為 untyped
+    let k = path.length - 1;
+    while (k >= 0 && path[k].type === 'del') {
+        path[k].type = 'untyped';
+        k--;
+    }
+    
     return path;
 }
 
@@ -505,7 +513,7 @@ function alignEnglishWords(sourceText, inputText) {
     
     for (let i = 1; i <= M; i++) {
         for (let j = 1; j <= N; j++) {
-            let cost = (sourceWords[i-1] === inputWords[j-1]) ? 0 : 1;
+            let cost = (sourceWords[i-1].trim() === inputWords[j-1].trim()) ? 0 : 1;
             dp[i][j] = Math.min(
                 dp[i-1][j] + 1,       // Deletion
                 dp[i][j-1] + 1,       // Insertion
@@ -516,10 +524,9 @@ function alignEnglishWords(sourceText, inputText) {
     
     let i = M, j = N;
     let path = [];
-    let errors = 0;
     
     while (i > 0 || j > 0) {
-        if (i > 0 && j > 0 && sourceWords[i-1] === inputWords[j-1]) {
+        if (i > 0 && j > 0 && sourceWords[i-1].trim() === inputWords[j-1].trim()) {
             path.push({ type: 'match', word: sourceWords[i-1] });
             i--;
             j--;
@@ -527,25 +534,20 @@ function alignEnglishWords(sourceText, inputText) {
             let score = dp[i][j];
             if (i > 0 && score === dp[i-1][j] + 1) {
                 path.push({ type: 'del', word: sourceWords[i-1] });
-                errors++;
                 i--;
             } else if (j > 0 && score === dp[i][j-1] + 1) {
                 path.push({ type: 'ins', word: inputWords[j-1] });
-                errors++;
                 j--;
             } else if (i > 0 && j > 0 && score === dp[i-1][j-1] + 1) {
                 path.push({ type: 'sub', orig: sourceWords[i-1], input: inputWords[j-1] });
-                errors++;
                 i--;
                 j--;
             } else {
                 if (i > 0) {
                     path.push({ type: 'del', word: sourceWords[i-1] });
-                    errors++;
                     i--;
                 } else if (j > 0) {
                     path.push({ type: 'ins', word: inputWords[j-1] });
-                    errors++;
                     j--;
                 }
             }
@@ -554,16 +556,29 @@ function alignEnglishWords(sourceText, inputText) {
     
     path.reverse();
     
+    // 將末端連續未輸入的 del 單字標記為 untyped
+    let k = path.length - 1;
+    while (k >= 0 && path[k].type === 'del') {
+        path[k].type = 'untyped';
+        k--;
+    }
+    
+    let errors = 0;
     let alignedHtml = "";
     path.forEach(item => {
         if (item.type === 'match') {
             alignedHtml += `<span class="char-match">${escapeHtml(item.word)}</span>`;
         } else if (item.type === 'sub') {
             alignedHtml += `<span class="char-sub" title="原稿: ${escapeHtml(item.orig)}">${escapeHtml(item.input)}</span>`;
+            errors++;
         } else if (item.type === 'ins') {
             alignedHtml += `<span class="char-ins">${escapeHtml(item.word)}</span>`;
+            errors++;
         } else if (item.type === 'del') {
             alignedHtml += `<span class="char-del">${escapeHtml(item.word)}</span>`;
+            errors++;
+        } else if (item.type === 'untyped') {
+            alignedHtml += `<span class="char-untyped">${escapeHtml(item.word)}</span>`;
         }
     });
     
@@ -605,8 +620,6 @@ function calculateAndShowResults() {
         let globalPath = alignChineseGlobal(gameState.bookContent, finalInputText);
         
         // 2. 依照原稿每一列 (\n) 將對齊路徑切分成各列的統計
-        // 我們將原稿依 \n 拆分成列。每一列可能包含 \n。
-        // 原稿拆分
         let sourceLines = gameState.bookContent.split('\n');
         
         // 統計各列結果的容器
@@ -617,8 +630,6 @@ function calculateAndShowResults() {
         globalPath.forEach(node => {
             currentLinePath.push(node);
             
-            // 判斷是否為原稿中的換行符
-            // 注意：如果原稿字元中包含 \n，或者是顛倒字中包含 \n，這都代表此列結束
             if (node.srcChar.includes('\n')) {
                 linesResults.push(analyzeLinePath(currentLinePath, sourceLines[lineIdx] ? sourceLines[lineIdx].length : 0));
                 currentLinePath = [];
@@ -626,13 +637,13 @@ function calculateAndShowResults() {
             }
         });
         
-        // 把剩餘的節點歸入最後一列
         if (currentLinePath.length > 0 || linesResults.length === 0) {
             linesResults.push(analyzeLinePath(currentLinePath, sourceLines[lineIdx] ? sourceLines[lineIdx].length : 0));
         }
         
         // 3. 匯總各列結果
         let totalOrigChars = 0;
+        let totalTestedChars = 0;
         let totalMatched = 0;
         let totalErrors = 0;
         let totalSub = 0;
@@ -643,12 +654,11 @@ function calculateAndShowResults() {
         let combinedHtml = "";
         
         linesResults.forEach((res, idx) => {
-            // 每列淨字數 = 該列正確字數 - (錯誤次數 * 0.5)
-            // 淨字數最低為 0
             let net = Math.max(0, res.matched - res.errors * 0.5);
             sumNetChars += net;
             
             totalOrigChars += res.sourceLength;
+            totalTestedChars += res.testedSourceChars;
             totalMatched += res.matched;
             totalErrors += res.errors;
             totalSub += res.sub;
@@ -661,13 +671,12 @@ function calculateAndShowResults() {
         
         compareBox.innerHTML = combinedHtml;
         
-        // 錯誤率 = 總錯誤次數 ÷ 應輸入字數 (總原稿字數)
-        // 應輸入字數過濾掉換行符以求精確
-        let pureOrigCharsLength = gameState.bookContent.replace(/\n/g, '').length;
-        if (pureOrigCharsLength === 0) pureOrigCharsLength = 1;
+        // 錯誤率 = 總錯誤次數 ÷ 學生時限內實際涵蓋應打字數 (而非全文章字數)
+        let pureTestedCharsLength = totalTestedChars;
+        if (pureTestedCharsLength === 0) pureTestedCharsLength = 1;
         
-        let errRate = totalErrors / pureOrigCharsLength;
-        let isPass = errRate < 0.1; // 錯誤率 < 10%
+        let errRate = totalErrors / pureTestedCharsLength;
+        let isPass = (totalTestedChars > 0) && (errRate < 0.1); // 錯誤率 < 10% 且至少有輸入字數
         
         // 每分鐘平均字數 = 每列淨字數之總和 ÷ 測驗時間 (分鐘)
         let avgSpeed = sumNetChars / timeElapsedMin;
@@ -684,11 +693,11 @@ function calculateAndShowResults() {
             statusEl.textContent = "合格";
             statusEl.className = "card-unit badge-success";
         } else {
-            statusEl.textContent = "不予計算 (錯誤率 ≧ 10%)";
+            statusEl.textContent = (totalTestedChars === 0) ? "未開始打字" : "不予計算 (錯誤率 ≧ 10%)";
             statusEl.className = "card-unit badge-fail";
         }
         
-        document.getElementById('res-zh-chars').textContent = `${pureOrigCharsLength} / ${totalMatched}`;
+        document.getElementById('res-zh-chars').textContent = `${totalTestedChars} / ${totalMatched}`;
         document.getElementById('res-zh-errors').textContent = `${totalErrors} (${(totalErrors * 0.5).toFixed(1)})`;
         
         // 錯誤類型細項
@@ -731,6 +740,7 @@ function analyzeLinePath(linePath, sourceLength) {
     let ins = 0;
     let del = 0;
     let trans = 0;
+    let untyped = 0;
     let alignedHtml = "";
     
     linePath.forEach(node => {
@@ -773,23 +783,32 @@ function analyzeLinePath(linePath, sourceLength) {
                 del++; // 漏打換行符也計入漏打字
             }
         } else if (node.type === 'trans') {
-            // 顛倒字：包含兩個字元
             alignedHtml += `<span class="char-trans">${escapeHtml(node.inpChar)}</span>`;
             trans++;
             matched += 2; // 這兩個字都對，只是顛倒，算正確字 2 個
+        } else if (node.type === 'untyped') {
+            if (!isSrcNewline) {
+                alignedHtml += `<span class="char-untyped">${escapeHtml(node.srcChar)}</span>`;
+                untyped++;
+            } else {
+                alignedHtml += `<span class="char-untyped char-newline">\n</span>`;
+            }
         }
     });
     
     let errors = sub + ins + del + trans;
+    let testedSourceChars = matched + sub + del + (trans * 2);
     
     return {
         sourceLength: sourceLength,
+        testedSourceChars: testedSourceChars,
         errors: errors,
         matched: matched,
         sub: sub,
         ins: ins,
         del: del,
         trans: trans,
+        untyped: untyped,
         alignedHtml: alignedHtml
     };
 }

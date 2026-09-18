@@ -375,10 +375,12 @@ select:focus, input[type="number"]:focus {
 .display-wrapper {
     background: rgba(0, 0, 0, 0.35);
     border-radius: 16px;
-    border: 1px solid var(--panel-border);
+    border: 2px solid var(--panel-border);
     padding: 24px;
+    height: 280px;
     max-height: 280px;
-    overflow-y: auto;
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
@@ -392,12 +394,14 @@ select:focus, input[type="number"]:focus {
 }
 
 .text-display-box {
+    font-family: var(--font-main);
     font-size: 1.35rem;
     line-height: 2.1;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
     white-space: pre-wrap;
     word-break: break-all;
+    overflow-wrap: break-word;
 }
 
 /* 中文列顯示 */
@@ -463,9 +467,14 @@ select:focus, input[type="number"]:focus {
     height: 280px;
     resize: none;
     font-family: var(--font-main);
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.1) transparent;
     user-select: text;
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-wrap: break-word;
 }
 
 #typing-input-box:focus {
@@ -699,6 +708,7 @@ select:focus, input[type="number"]:focus {
 .dot.ins { background: var(--color-warning); }
 .dot.del { background: var(--color-info); }
 .dot.trans { background: var(--color-trans); }
+.dot.untyped { background: var(--text-secondary); opacity: 0.5; }
 
 .compare-box {
     background: rgba(0, 0, 0, 0.4);
@@ -750,6 +760,10 @@ select:focus, input[type="number"]:focus {
     color: var(--color-trans);
     font-weight: bold;
     border-bottom: 2px dashed var(--color-trans);
+}
+.char-untyped {
+    color: var(--text-secondary);
+    opacity: 0.35;
 }
 
 .modal-footer {
